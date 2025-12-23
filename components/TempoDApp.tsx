@@ -1,7 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, Send, Settings, LogOut, RefreshCw, MessageCircle, CheckCircle, AlertCircle } from 'lucide-react';
 
-const STABLECOINS = {
+interface StablecoinConfig {
+  address: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+}
+
+interface StablecoinBalances {
+  AlphaUSD: string;
+  BetaUSD: string;
+  ThetaUSD: string;
+}
+
+const STABLECOINS: Record<string, StablecoinConfig> = {
   AlphaUSD: {
     address: '0x20c0000000000000000000000000000000000001',
     name: 'AlphaUSD',
@@ -22,26 +35,27 @@ const STABLECOINS = {
   }
 };
 
+// Thay thế token của bạn ở đây hoặc để trống và nhập trong UI
 const TELEGRAM_BOT_TOKEN = '8285431795:AAFZo19Bv79isOgBvwMyM2Q4I7M7e_K0c-w';
 
-const TempoDApp = () => {
-  const [account, setAccount] = useState(null);
-  const [nativeBalance, setNativeBalance] = useState('0');
-  const [stablecoinBalances, setStablecoinBalances] = useState({
+const TempoDApp: React.FC = () => {
+  const [account, setAccount] = useState<string | null>(null);
+  const [nativeBalance, setNativeBalance] = useState<string>('0');
+  const [stablecoinBalances, setStablecoinBalances] = useState<StablecoinBalances>({
     AlphaUSD: '0',
     BetaUSD: '0',
     ThetaUSD: '0'
   });
-  const [telegramChatId, setTelegramChatId] = useState('');
-  const [savedChatId, setSavedChatId] = useState('');
-  const [showProfile, setShowProfile] = useState(false);
-  const [recipient, setRecipient] = useState('');
-  const [amount, setAmount] = useState('');
-  const [selectedToken, setSelectedToken] = useState('AlphaUSD');
-  const [memo, setMemo] = useState('');
-  const [txStatus, setTxStatus] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [testingTelegram, setTestingTelegram] = useState(false);
+  const [telegramChatId, setTelegramChatId] = useState<string>('');
+  const [savedChatId, setSavedChatId] = useState<string>('');
+  const [showProfile, setShowProfile] = useState<boolean>(false);
+  const [recipient, setRecipient] = useState<string>('');
+  const [amount, setAmount] = useState<string>('');
+  const [selectedToken, setSelectedToken] = useState<string>('AlphaUSD');
+  const [memo, setMemo] = useState<string>('');
+  const [txStatus, setTxStatus] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [testingTelegram, setTestingTelegram] = useState<boolean>(false);
 
   useEffect(() => {
     if (account) {
@@ -50,7 +64,7 @@ const TempoDApp = () => {
     }
   }, [account]);
 
-  const loadChatIdFromStorage = () => {
+  const loadChatIdFromStorage = (): void => {
     try {
       const stored = localStorage.getItem(`tempo_telegram_${account}`);
       if (stored) {
@@ -61,7 +75,7 @@ const TempoDApp = () => {
     }
   };
 
-  const sendTelegramMessage = async (chatId, message) => {
+  const sendTelegramMessage = async (chatId: string, message: string): Promise<boolean> => {
     try {
       const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
         method: 'POST',
@@ -83,7 +97,7 @@ const TempoDApp = () => {
     }
   };
 
-  const testTelegramConnection = async () => {
+  const testTelegramConnection = async (): Promise<void> => {
     if (!telegramChatId) {
       setTxStatus('Please enter your Telegram Chat ID');
       return;
@@ -110,7 +124,7 @@ const TempoDApp = () => {
     setTestingTelegram(false);
   };
 
-  const saveTelegramChatId = () => {
+  const saveTelegramChatId = (): void => {
     if (telegramChatId && account) {
       try {
         localStorage.setItem(`tempo_telegram_${account}`, telegramChatId);
@@ -126,7 +140,7 @@ const TempoDApp = () => {
     }
   };
 
-  const connectWallet = async () => {
+  const connectWallet = async (): Promise<void> => {
     if (typeof window.ethereum !== 'undefined') {
       try {
         const accounts = await window.ethereum.request({ 
@@ -140,7 +154,7 @@ const TempoDApp = () => {
         } else {
           setTxStatus('No accounts found. Please unlock MetaMask.');
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error connecting wallet:', error);
         if (error.code === 4001) {
           setTxStatus('Connection rejected. Please approve in MetaMask.');
@@ -155,7 +169,7 @@ const TempoDApp = () => {
     }
   };
 
-  const getNativeBalance = async () => {
+  const getNativeBalance = async (): Promise<void> => {
     if (window.ethereum && account) {
       try {
         const balance = await window.ethereum.request({
@@ -170,7 +184,7 @@ const TempoDApp = () => {
     }
   };
 
-  const getStablecoinBalance = async (tokenKey) => {
+  const getStablecoinBalance = async (tokenKey: string): Promise<string> => {
     if (!window.ethereum || !account) return '0';
     
     try {
@@ -198,7 +212,7 @@ const TempoDApp = () => {
     }
   };
 
-  const getAllBalances = async () => {
+  const getAllBalances = async (): Promise<void> => {
     setIsLoading(true);
     try {
       await getNativeBalance();
@@ -219,7 +233,7 @@ const TempoDApp = () => {
     }
   };
 
-  const sendPayment = async () => {
+  const sendPayment = async (): Promise<void> => {
     if (!account || !recipient || !amount || !window.ethereum) {
       setTxStatus('Please fill all required fields');
       return;
@@ -280,7 +294,7 @@ const TempoDApp = () => {
       
       setTimeout(() => getAllBalances(), 3000);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending transaction:', error);
       setTxStatus('Transaction failed: ' + error.message);
     } finally {
@@ -288,7 +302,7 @@ const TempoDApp = () => {
     }
   };
 
-  const disconnectWallet = () => {
+  const disconnectWallet = (): void => {
     setAccount(null);
     setNativeBalance('0');
     setStablecoinBalances({
