@@ -45,7 +45,7 @@ const ERC20_ABI = [
 ];
 
 const TempoDApp = () => {
-  const [account, setAccount] = useState(null);
+  const [account, setAccount] = useState<string | null>(null);
   const [nativeBalance, setNativeBalance] = useState('0');
   const [stablecoinBalances, setStablecoinBalances] = useState({
     AlphaUSD: '0',
@@ -129,7 +129,7 @@ const TempoDApp = () => {
     
     try {
       const token = STABLECOINS[tokenKey];
-      const data = '0x70a08231000000000000000000000000' + account.slice(2).padStart(64, '0');
+      const data = '0x70a08231000000000000000000000000' + (account as string).slice(2).padStart(64, '0');
       
       const balance = await window.ethereum.request({
         method: 'eth_call',
