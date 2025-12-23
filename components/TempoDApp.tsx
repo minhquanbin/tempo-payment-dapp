@@ -129,9 +129,12 @@ const TempoDApp = () => {
     
     try {
       const token = STABLECOINS[tokenKey];
-      const data = '0x70a08231000000000000000000000000' + (account as string).slice(2).padStart(64, '0');
+      // ERC20 balanceOf function signature: 0x70a08231
+      // Encode address as 32 bytes (64 hex chars)
+      const addressParam = account.toLowerCase().slice(2).padStart(64, '0');
+      const data = '0x70a08231' + addressParam;
       
-      const balance = await window.ethereum.request({
+      const result = await window.ethereum.request({
         method: 'eth_call',
         params: [{
           to: token.address,
@@ -139,11 +142,15 @@ const TempoDApp = () => {
         }, 'latest']
       });
       
-      const balanceInTokens = parseInt(balance, 16) / Math.pow(10, token.decimals);
+      if (!result || result === '0x') {
+        return '0.00';
+      }
+      
+      const balanceInTokens = parseInt(result, 16) / Math.pow(10, token.decimals);
       return balanceInTokens.toFixed(2);
     } catch (error: any) {
       console.error(`Error getting ${tokenKey} balance:`, error);
-      return '0';
+      return '0.00';
     }
   };
 
@@ -152,9 +159,16 @@ const TempoDApp = () => {
     try {
       await getNativeBalance();
       
+      console.log('Fetching stablecoin balances for account:', account);
+      
       const alphaBalance = await getStablecoinBalance('AlphaUSD');
+      console.log('AlphaUSD balance:', alphaBalance);
+      
       const betaBalance = await getStablecoinBalance('BetaUSD');
+      console.log('BetaUSD balance:', betaBalance);
+      
       const thetaBalance = await getStablecoinBalance('ThetaUSD');
+      console.log('ThetaUSD balance:', thetaBalance);
       
       setStablecoinBalances({
         AlphaUSD: alphaBalance,
@@ -305,7 +319,7 @@ const TempoDApp = () => {
               </li>
               <li>3. Switch to Tempo Testnet</li>
               <li>4. Click "Connect MetaMask" above</li>
-              <li>5. Get testnet tokens from: https://faucet.testnet.tempo.xyz</li>
+              <li>5. Get testnet tokens from: <a href="https://docs.tempo.xyz/quickstart/faucet" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Tempo Faucet</a></li>
             </ol>
           </div>
         </div>
@@ -345,7 +359,7 @@ const TempoDApp = () => {
             
             <div className="flex gap-2 flex-wrap">
               <a
-                href="https://faucet.testnet.tempo.xyz"
+                href="https://docs.tempo.xyz/quickstart/faucet"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium"
