@@ -57,7 +57,7 @@ const TempoDApp = () => {
   const [showProfile, setShowProfile] = useState(false);
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
-  const [selectedToken, setSelectedToken] = useState('AlphaUSD');
+  const [selectedToken, setSelectedToken] = useState<keyof typeof STABLECOINS>('AlphaUSD');
   const [memo, setMemo] = useState('');
   const [txStatus, setTxStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
