@@ -69,7 +69,7 @@ const TempoDApp = () => {
         
         setAccount(accounts[0]);
         setTxStatus('Wallet connected successfully!');
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error connecting wallet:', error);
         setTxStatus('Failed to connect wallet');
       }
@@ -87,7 +87,7 @@ const TempoDApp = () => {
         });
         const balanceInEth = parseInt(balance, 16) / 1e18;
         setBalance(balanceInEth.toFixed(4));
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error getting balance:', error);
       }
     }
@@ -104,7 +104,7 @@ const TempoDApp = () => {
   };
 
   const sendPayment = async () => {
-    if (!account || !recipient || !amount) {
+    if (!account || !recipient || !amount || !window.ethereum) {
       setTxStatus('Please fill all required fields');
       return;
     }
@@ -144,7 +144,7 @@ const TempoDApp = () => {
       // Refresh balance
       setTimeout(() => getBalance(), 3000);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending transaction:', error);
       setTxStatus('Transaction failed: ' + error.message);
     }
