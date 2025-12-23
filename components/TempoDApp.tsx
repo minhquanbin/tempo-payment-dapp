@@ -47,7 +47,7 @@ const TempoDApp = () => {
               method: 'wallet_switchEthereumChain',
               params: [{ chainId: tempoChainId }],
             });
-          } catch (switchError) {
+          } catch (switchError: any) {
             if (switchError.code === 4902) {
               await window.ethereum.request({
                 method: 'wallet_addEthereumChain',
