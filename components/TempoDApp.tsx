@@ -1,36 +1,88 @@
 import React, { useState, useEffect } from 'react';
-import { Wallet, Send, Mail, Settings, LogOut } from 'lucide-react';
+import { Wallet, Send, Mail, Settings, LogOut, RefreshCw } from 'lucide-react';
+
+// Địa chỉ contract của các stablecoin trên Tempo testnet
+const STABLECOINS = {
+  AlphaUSD: {
+    address: '0x20c0000000000000000000000000000000000001',
+    name: 'AlphaUSD',
+    symbol: 'AUSD',
+    decimals: 6
+  },
+  BetaUSD: {
+    address: '0x20c0000000000000000000000000000000000002',
+    name: 'BetaUSD',
+    symbol: 'BUSD',
+    decimals: 6
+  },
+  ThetaUSD: {
+    address: '0x20c0000000000000000000000000000000000003',
+    name: 'ThetaUSD',
+    symbol: 'TUSD',
+    decimals: 6
+  }
+};
+
+// ERC20 ABI cho balanceOf và transfer
+const ERC20_ABI = [
+  {
+    "constant": true,
+    "inputs": [{"name": "_owner", "type": "address"}],
+    "name": "balanceOf",
+    "outputs": [{"name": "balance", "type": "uint256"}],
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {"name": "_to", "type": "address"},
+      {"name": "_value", "type": "uint256"}
+    ],
+    "name": "transfer",
+    "outputs": [{"name": "", "type": "bool"}],
+    "type": "function"
+  }
+];
 
 const TempoDApp = () => {
   const [account, setAccount] = useState(null);
-  const [balance, setBalance] = useState('0');
+  const [nativeBalance, setNativeBalance] = useState('0');
+  const [stablecoinBalances, setStablecoinBalances] = useState({
+    AlphaUSD: '0',
+    BetaUSD: '0',
+    ThetaUSD: '0'
+  });
   const [email, setEmail] = useState('');
   const [savedEmail, setSavedEmail] = useState('');
   const [showProfile, setShowProfile] = useState(false);
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
+  const [selectedToken, setSelectedToken] = useState('AlphaUSD');
   const [memo, setMemo] = useState('');
   const [txStatus, setTxStatus] = useState('');
-  const [web3, setWeb3] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (account) {
       loadEmailFromStorage();
-      getBalance();
+      getAllBalances();
     }
   }, [account]);
 
   const loadEmailFromStorage = () => {
-    const stored = localStorage.getItem(`tempo_email_${account}`);
-    if (stored) {
-      setSavedEmail(stored);
+    try {
+      const stored = localStorage.getItem(`tempo_email_${account}`);
+      if (stored) {
+        setSavedEmail(stored);
+      }
+    } catch (error) {
+      console.error('Error loading email:', error);
     }
   };
 
   const connectWallet = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
-        // Request account access
         const accounts = await window.ethereum.request({ 
           method: 'eth_requestAccounts' 
         });
@@ -38,10 +90,11 @@ const TempoDApp = () => {
         if (accounts && accounts.length > 0) {
           setAccount(accounts[0]);
           setTxStatus('Wallet connected successfully!');
+          setTimeout(() => setTxStatus(''), 3000);
         } else {
           setTxStatus('No accounts found. Please unlock MetaMask.');
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error connecting wallet:', error);
         if (error.code === 4001) {
           setTxStatus('Connection rejected. Please approve in MetaMask.');
@@ -56,7 +109,7 @@ const TempoDApp = () => {
     }
   };
 
-  const getBalance = async () => {
+  const getNativeBalance = async () => {
     if (window.ethereum && account) {
       try {
         const balance = await window.ethereum.request({
@@ -64,20 +117,70 @@ const TempoDApp = () => {
           params: [account, 'latest']
         });
         const balanceInEth = parseInt(balance, 16) / 1e18;
-        setBalance(balanceInEth.toFixed(4));
-      } catch (error: any) {
-        console.error('Error getting balance:', error);
+        setNativeBalance(balanceInEth.toFixed(4));
+      } catch (error) {
+        console.error('Error getting native balance:', error);
       }
+    }
+  };
+
+  const getStablecoinBalance = async (tokenKey) => {
+    if (!window.ethereum || !account) return '0';
+    
+    try {
+      const token = STABLECOINS[tokenKey];
+      const data = '0x70a08231000000000000000000000000' + account.slice(2).padStart(64, '0');
+      
+      const balance = await window.ethereum.request({
+        method: 'eth_call',
+        params: [{
+          to: token.address,
+          data: data
+        }, 'latest']
+      });
+      
+      const balanceInTokens = parseInt(balance, 16) / Math.pow(10, token.decimals);
+      return balanceInTokens.toFixed(2);
+    } catch (error) {
+      console.error(`Error getting ${tokenKey} balance:`, error);
+      return '0';
+    }
+  };
+
+  const getAllBalances = async () => {
+    setIsLoading(true);
+    try {
+      await getNativeBalance();
+      
+      const alphaBalance = await getStablecoinBalance('AlphaUSD');
+      const betaBalance = await getStablecoinBalance('BetaUSD');
+      const thetaBalance = await getStablecoinBalance('ThetaUSD');
+      
+      setStablecoinBalances({
+        AlphaUSD: alphaBalance,
+        BetaUSD: betaBalance,
+        ThetaUSD: thetaBalance
+      });
+    } catch (error) {
+      console.error('Error getting balances:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const saveEmail = () => {
     if (email && account) {
-      localStorage.setItem(`tempo_email_${account}`, email);
-      setSavedEmail(email);
-      setEmail('');
-      setShowProfile(false);
-      setTxStatus('Email linked successfully!');
+      try {
+        localStorage.setItem(`tempo_email_${account}`, email);
+        setSavedEmail(email);
+        setEmail('');
+        setShowProfile(false);
+        setTxStatus('Email linked successfully!');
+        setTimeout(() => setTxStatus(''), 3000);
+      } catch (error) {
+        console.error('Error saving email:', error);
+        setTxStatus('Failed to save email');
+      }
     }
   };
 
@@ -89,15 +192,21 @@ const TempoDApp = () => {
 
     try {
       setTxStatus('Processing transaction...');
+      setIsLoading(true);
       
-      const amountInWei = '0x' + (parseFloat(amount) * 1e18).toString(16);
-      const memoHex = memo ? '0x' + Buffer.from(memo, 'utf8').toString('hex') : '0x';
+      const token = STABLECOINS[selectedToken];
+      const amountInSmallestUnit = Math.floor(parseFloat(amount) * Math.pow(10, token.decimals));
+      
+      // Tạo data cho ERC20 transfer
+      const recipientPadded = recipient.slice(2).padStart(64, '0');
+      const amountHex = amountInSmallestUnit.toString(16).padStart(64, '0');
+      const transferData = '0xa9059cbb' + recipientPadded + amountHex;
       
       const transactionParameters = {
         from: account,
-        to: recipient,
-        value: amountInWei,
-        data: memoHex,
+        to: token.address,
+        data: transferData,
+        value: '0x0'
       };
 
       const txHash = await window.ethereum.request({
@@ -106,6 +215,10 @@ const TempoDApp = () => {
       });
 
       setTxStatus(`Transaction sent! Hash: ${txHash.substring(0, 10)}...`);
+      
+      if (memo) {
+        setTxStatus(`Transaction sent with memo: "${memo}". Hash: ${txHash.substring(0, 10)}...`);
+      }
       
       // Simulate sending email notification
       if (savedEmail) {
@@ -119,18 +232,25 @@ const TempoDApp = () => {
       setAmount('');
       setMemo('');
       
-      // Refresh balance
-      setTimeout(() => getBalance(), 3000);
+      // Refresh balances
+      setTimeout(() => getAllBalances(), 3000);
       
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error sending transaction:', error);
       setTxStatus('Transaction failed: ' + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const disconnectWallet = () => {
     setAccount(null);
-    setBalance('0');
+    setNativeBalance('0');
+    setStablecoinBalances({
+      AlphaUSD: '0',
+      BetaUSD: '0',
+      ThetaUSD: '0'
+    });
     setSavedEmail('');
     setTxStatus('');
   };
@@ -200,13 +320,23 @@ const TempoDApp = () => {
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-gray-800">Tempo Wallet</h1>
-            <button
-              onClick={disconnectWallet}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              Disconnect
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={getAllBalances}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+              <button
+                onClick={disconnectWallet}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Disconnect
+              </button>
+            </div>
           </div>
           
           <div className="bg-gradient-to-r from-purple-100 to-cyan-100 rounded-xl p-4 mb-4">
@@ -214,10 +344,34 @@ const TempoDApp = () => {
             <div className="font-mono text-sm text-gray-800 break-all">{account}</div>
           </div>
           
+          {/* Stablecoin Balances */}
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-800 mb-3">Stablecoin Balances</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-200">
+                <div className="text-sm text-gray-600 mb-1">AlphaUSD</div>
+                <div className="text-2xl font-bold text-gray-800">{stablecoinBalances.AlphaUSD}</div>
+                <div className="text-xs text-gray-500 mt-1">AUSD</div>
+              </div>
+              
+              <div className="bg-gradient-to-r from-blue-50 to-sky-50 rounded-xl p-4 border-2 border-blue-200">
+                <div className="text-sm text-gray-600 mb-1">BetaUSD</div>
+                <div className="text-2xl font-bold text-gray-800">{stablecoinBalances.BetaUSD}</div>
+                <div className="text-xs text-gray-500 mt-1">BUSD</div>
+              </div>
+              
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border-2 border-purple-200">
+                <div className="text-sm text-gray-600 mb-1">ThetaUSD</div>
+                <div className="text-2xl font-bold text-gray-800">{stablecoinBalances.ThetaUSD}</div>
+                <div className="text-xs text-gray-500 mt-1">TUSD</div>
+              </div>
+            </div>
+          </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4">
-              <div className="text-sm text-gray-600 mb-1">Balance</div>
-              <div className="text-3xl font-bold text-gray-800">{balance} USD</div>
+            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl p-4">
+              <div className="text-sm text-gray-600 mb-1">Native Balance</div>
+              <div className="text-3xl font-bold text-gray-800">{nativeBalance} USD</div>
             </div>
             
             <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
@@ -276,6 +430,21 @@ const TempoDApp = () => {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Token *
+              </label>
+              <select
+                value={selectedToken}
+                onChange={(e) => setSelectedToken(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+              >
+                <option value="AlphaUSD">AlphaUSD (Balance: {stablecoinBalances.AlphaUSD})</option>
+                <option value="BetaUSD">BetaUSD (Balance: {stablecoinBalances.BetaUSD})</option>
+                <option value="ThetaUSD">ThetaUSD (Balance: {stablecoinBalances.ThetaUSD})</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Recipient Address *
               </label>
               <input
@@ -289,11 +458,11 @@ const TempoDApp = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Amount (USD) *
+                Amount *
               </label>
               <input
                 type="number"
-                step="0.0001"
+                step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.0"
@@ -312,19 +481,27 @@ const TempoDApp = () => {
                 rows={3}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none resize-none"
               />
+              <p className="text-xs text-gray-500 mt-1">Note: Memo is for your reference only and not stored on-chain in this version</p>
             </div>
             
             <button
               onClick={sendPayment}
-              className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 text-white py-4 rounded-xl font-semibold hover:shadow-lg transform hover:scale-105 transition-all duration-200 flex items-center justify-center gap-2"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 text-white py-4 rounded-xl font-semibold hover:shadow-lg transform hover:scale-105 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send className="w-5 h-5" />
-              Send Payment
+              {isLoading ? 'Processing...' : 'Send Payment'}
             </button>
           </div>
           
           {txStatus && (
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+            <div className={`mt-4 p-4 rounded-lg text-sm ${
+              txStatus.includes('success') || txStatus.includes('Successfully') || txStatus.includes('sent')
+                ? 'bg-green-50 border border-green-200 text-green-800' 
+                : txStatus.includes('Failed') || txStatus.includes('failed')
+                ? 'bg-red-50 border border-red-200 text-red-800'
+                : 'bg-blue-50 border border-blue-200 text-blue-800'
+            }`}>
               {txStatus}
             </div>
           )}
