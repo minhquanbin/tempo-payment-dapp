@@ -75,7 +75,7 @@ const TempoDApp = () => {
       if (stored) {
         setSavedEmail(stored);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading email:', error);
     }
   };
@@ -94,7 +94,7 @@ const TempoDApp = () => {
         } else {
           setTxStatus('No accounts found. Please unlock MetaMask.');
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error connecting wallet:', error);
         if (error.code === 4001) {
           setTxStatus('Connection rejected. Please approve in MetaMask.');
@@ -118,7 +118,7 @@ const TempoDApp = () => {
         });
         const balanceInEth = parseInt(balance, 16) / 1e18;
         setNativeBalance(balanceInEth.toFixed(4));
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error getting native balance:', error);
       }
     }
@@ -141,7 +141,7 @@ const TempoDApp = () => {
       
       const balanceInTokens = parseInt(balance, 16) / Math.pow(10, token.decimals);
       return balanceInTokens.toFixed(2);
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error getting ${tokenKey} balance:`, error);
       return '0';
     }
@@ -161,7 +161,7 @@ const TempoDApp = () => {
         BetaUSD: betaBalance,
         ThetaUSD: thetaBalance
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting balances:', error);
     } finally {
       setIsLoading(false);
@@ -177,7 +177,7 @@ const TempoDApp = () => {
         setShowProfile(false);
         setTxStatus('Email linked successfully!');
         setTimeout(() => setTxStatus(''), 3000);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error saving email:', error);
         setTxStatus('Failed to save email');
       }
@@ -235,7 +235,7 @@ const TempoDApp = () => {
       // Refresh balances
       setTimeout(() => getAllBalances(), 3000);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending transaction:', error);
       setTxStatus('Transaction failed: ' + error.message);
     } finally {
