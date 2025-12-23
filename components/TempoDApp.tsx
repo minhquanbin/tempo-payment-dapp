@@ -30,51 +30,29 @@ const TempoDApp = () => {
   const connectWallet = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
+        // Request account access
         const accounts = await window.ethereum.request({ 
           method: 'eth_requestAccounts' 
         });
         
-        const chainId = await window.ethereum.request({ 
-          method: 'eth_chainId' 
-        });
-        
-        // Tempo testnet chainId: 0x29A (666)
-        const tempoChainId = '0x29A';
-        
-        if (chainId !== tempoChainId) {
-          try {
-            await window.ethereum.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: tempoChainId }],
-            });
-          } catch (switchError: any) {
-            if (switchError.code === 4902) {
-              await window.ethereum.request({
-                method: 'wallet_addEthereumChain',
-                params: [{
-                  chainId: tempoChainId,
-                  chainName: 'Tempo Testnet',
-                  nativeCurrency: {
-                    name: 'TEMPO',
-                    symbol: 'TEMPO',
-                    decimals: 18
-                  },
-                  rpcUrls: ['https://rpc.testnet.tempo.xyz'],
-                  blockExplorerUrls: ['https://explorer.testnet.tempo.xyz']
-                }],
-              });
-            }
-          }
+        if (accounts && accounts.length > 0) {
+          setAccount(accounts[0]);
+          setTxStatus('Wallet connected successfully!');
+        } else {
+          setTxStatus('No accounts found. Please unlock MetaMask.');
         }
-        
-        setAccount(accounts[0]);
-        setTxStatus('Wallet connected successfully!');
       } catch (error: any) {
         console.error('Error connecting wallet:', error);
-        setTxStatus('Failed to connect wallet');
+        if (error.code === 4001) {
+          setTxStatus('Connection rejected. Please approve in MetaMask.');
+        } else if (error.code === -32002) {
+          setTxStatus('Connection request pending. Please check MetaMask.');
+        } else {
+          setTxStatus('Failed to connect: ' + (error.message || 'Unknown error'));
+        }
       }
     } else {
-      setTxStatus('Please install MetaMask!');
+      setTxStatus('MetaMask not detected. Please install MetaMask extension.');
     }
   };
 
@@ -178,10 +156,38 @@ const TempoDApp = () => {
           </button>
           
           {txStatus && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+            <div className={`mt-4 p-3 rounded-lg text-sm ${
+              txStatus.includes('success') || txStatus.includes('Successfully') 
+                ? 'bg-green-50 border border-green-200 text-green-800' 
+                : txStatus.includes('Failed') || txStatus.includes('rejected') || txStatus.includes('not detected')
+                ? 'bg-red-50 border border-red-200 text-red-800'
+                : 'bg-blue-50 border border-blue-200 text-blue-800'
+            }`}>
               {txStatus}
             </div>
           )}
+
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+              <Settings className="w-4 h-4" />
+              Setup Instructions
+            </h3>
+            <ol className="text-sm text-gray-600 space-y-2">
+              <li>1. Install MetaMask extension</li>
+              <li>2. Add Tempo Testnet manually:
+                <div className="mt-2 ml-4 p-2 bg-white rounded border text-xs font-mono">
+                  <div>Network: Tempo Testnet</div>
+                  <div>RPC: https://rpc.testnet.tempo.xyz</div>
+                  <div>Chain ID: 42429</div>
+                  <div>Symbol: USD</div>
+                  <div>Explorer: https://explorer.testnet.tempo.xyz</div>
+                </div>
+              </li>
+              <li>3. Switch to Tempo Testnet</li>
+              <li>4. Click "Connect MetaMask" above</li>
+              <li>5. Get testnet tokens from: https://faucet.testnet.tempo.xyz</li>
+            </ol>
+          </div>
         </div>
       </div>
     );
@@ -211,7 +217,7 @@ const TempoDApp = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4">
               <div className="text-sm text-gray-600 mb-1">Balance</div>
-              <div className="text-3xl font-bold text-gray-800">{balance} TEMPO</div>
+              <div className="text-3xl font-bold text-gray-800">{balance} USD</div>
             </div>
             
             <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
@@ -283,7 +289,7 @@ const TempoDApp = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Amount (TEMPO) *
+                Amount (USD) *
               </label>
               <input
                 type="number"
