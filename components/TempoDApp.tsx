@@ -22,7 +22,7 @@ const STABLECOINS = {
   }
 };
 
-const TELEGRAM_BOT_TOKEN = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN || '';
+const TELEGRAM_BOT_TOKEN = '8285431795:AAFZo19Bv79isOgBvwMyM2Q4I7M7e_K0c-w';
 
 const TempoDApp = () => {
   const [account, setAccount] = useState(null);
