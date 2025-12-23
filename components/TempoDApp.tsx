@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Wallet, Send, Mail, Settings, LogOut, RefreshCw } from 'lucide-react';
+import { Wallet, Send, Settings, LogOut, RefreshCw, MessageCircle, CheckCircle, AlertCircle } from 'lucide-react';
 
-// Địa chỉ contract của các stablecoin trên Tempo testnet
 const STABLECOINS = {
   AlphaUSD: {
     address: '0x20c0000000000000000000000000000000000001',
@@ -23,60 +22,108 @@ const STABLECOINS = {
   }
 };
 
-// ERC20 ABI cho balanceOf và transfer
-const ERC20_ABI = [
-  {
-    "constant": true,
-    "inputs": [{"name": "_owner", "type": "address"}],
-    "name": "balanceOf",
-    "outputs": [{"name": "balance", "type": "uint256"}],
-    "type": "function"
-  },
-  {
-    "constant": false,
-    "inputs": [
-      {"name": "_to", "type": "address"},
-      {"name": "_value", "type": "uint256"}
-    ],
-    "name": "transfer",
-    "outputs": [{"name": "", "type": "bool"}],
-    "type": "function"
-  }
-];
+const TELEGRAM_BOT_TOKEN = '8285431795:AAFZo19Bv79isOgBvwMyM2Q4I7M7e_K0c-w
+';
 
 const TempoDApp = () => {
-  const [account, setAccount] = useState<string | null>(null);
+  const [account, setAccount] = useState(null);
   const [nativeBalance, setNativeBalance] = useState('0');
   const [stablecoinBalances, setStablecoinBalances] = useState({
     AlphaUSD: '0',
     BetaUSD: '0',
     ThetaUSD: '0'
   });
-  const [email, setEmail] = useState('');
-  const [savedEmail, setSavedEmail] = useState('');
+  const [telegramChatId, setTelegramChatId] = useState('');
+  const [savedChatId, setSavedChatId] = useState('');
   const [showProfile, setShowProfile] = useState(false);
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
-  const [selectedToken, setSelectedToken] = useState<keyof typeof STABLECOINS>('AlphaUSD');
+  const [selectedToken, setSelectedToken] = useState('AlphaUSD');
   const [memo, setMemo] = useState('');
   const [txStatus, setTxStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [testingTelegram, setTestingTelegram] = useState(false);
 
   useEffect(() => {
     if (account) {
-      loadEmailFromStorage();
+      loadChatIdFromStorage();
       getAllBalances();
     }
   }, [account]);
 
-  const loadEmailFromStorage = () => {
+  const loadChatIdFromStorage = () => {
     try {
-      const stored = localStorage.getItem(`tempo_email_${account}`);
+      const stored = localStorage.getItem(`tempo_telegram_${account}`);
       if (stored) {
-        setSavedEmail(stored);
+        setSavedChatId(stored);
       }
-    } catch (error: any) {
-      console.error('Error loading email:', error);
+    } catch (error) {
+      console.error('Error loading chat ID:', error);
+    }
+  };
+
+  const sendTelegramMessage = async (chatId, message) => {
+    try {
+      const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+          parse_mode: 'HTML'
+        })
+      });
+
+      const data = await response.json();
+      return data.ok;
+    } catch (error) {
+      console.error('Error sending Telegram message:', error);
+      return false;
+    }
+  };
+
+  const testTelegramConnection = async () => {
+    if (!telegramChatId) {
+      setTxStatus('Please enter your Telegram Chat ID');
+      return;
+    }
+
+    setTestingTelegram(true);
+    setTxStatus('Testing Telegram connection...');
+
+    const testMessage = `🔔 <b>Tempo Wallet - Test Connection</b>\n\n` +
+      `✅ Successfully connected!\n` +
+      `📱 Wallet: <code>${account?.substring(0, 6)}...${account?.substring(38)}</code>\n\n` +
+      `You will receive notifications for all transactions.`;
+
+    const success = await sendTelegramMessage(telegramChatId, testMessage);
+
+    if (success) {
+      setTxStatus('✅ Test message sent! Check your Telegram');
+      setTimeout(() => setTxStatus(''), 5000);
+    } else {
+      setTxStatus('❌ Failed to send message. Please check your Chat ID and Bot Token');
+      setTimeout(() => setTxStatus(''), 5000);
+    }
+
+    setTestingTelegram(false);
+  };
+
+  const saveTelegramChatId = () => {
+    if (telegramChatId && account) {
+      try {
+        localStorage.setItem(`tempo_telegram_${account}`, telegramChatId);
+        setSavedChatId(telegramChatId);
+        setTelegramChatId('');
+        setShowProfile(false);
+        setTxStatus('Telegram linked successfully! 🎉');
+        setTimeout(() => setTxStatus(''), 3000);
+      } catch (error) {
+        console.error('Error saving chat ID:', error);
+        setTxStatus('Failed to save Telegram Chat ID');
+      }
     }
   };
 
@@ -94,7 +141,7 @@ const TempoDApp = () => {
         } else {
           setTxStatus('No accounts found. Please unlock MetaMask.');
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error connecting wallet:', error);
         if (error.code === 4001) {
           setTxStatus('Connection rejected. Please approve in MetaMask.');
@@ -118,19 +165,17 @@ const TempoDApp = () => {
         });
         const balanceInEth = parseInt(balance, 16) / 1e18;
         setNativeBalance(balanceInEth.toFixed(4));
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error getting native balance:', error);
       }
     }
   };
 
-  const getStablecoinBalance = async (tokenKey: keyof typeof STABLECOINS): Promise<string> => {
+  const getStablecoinBalance = async (tokenKey) => {
     if (!window.ethereum || !account) return '0';
     
     try {
       const token = STABLECOINS[tokenKey];
-      // ERC20 balanceOf function signature: 0x70a08231
-      // Encode address as 32 bytes (64 hex chars)
       const addressParam = account.toLowerCase().slice(2).padStart(64, '0');
       const data = '0x70a08231' + addressParam;
       
@@ -148,7 +193,7 @@ const TempoDApp = () => {
       
       const balanceInTokens = parseInt(result, 16) / Math.pow(10, token.decimals);
       return balanceInTokens.toFixed(2);
-    } catch (error: any) {
+    } catch (error) {
       console.error(`Error getting ${tokenKey} balance:`, error);
       return '0.00';
     }
@@ -159,42 +204,19 @@ const TempoDApp = () => {
     try {
       await getNativeBalance();
       
-      console.log('Fetching stablecoin balances for account:', account);
-      
       const alphaBalance = await getStablecoinBalance('AlphaUSD');
-      console.log('AlphaUSD balance:', alphaBalance);
-      
       const betaBalance = await getStablecoinBalance('BetaUSD');
-      console.log('BetaUSD balance:', betaBalance);
-      
       const thetaBalance = await getStablecoinBalance('ThetaUSD');
-      console.log('ThetaUSD balance:', thetaBalance);
       
       setStablecoinBalances({
         AlphaUSD: alphaBalance,
         BetaUSD: betaBalance,
         ThetaUSD: thetaBalance
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting balances:', error);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const saveEmail = () => {
-    if (email && account) {
-      try {
-        localStorage.setItem(`tempo_email_${account}`, email);
-        setSavedEmail(email);
-        setEmail('');
-        setShowProfile(false);
-        setTxStatus('Email linked successfully!');
-        setTimeout(() => setTxStatus(''), 3000);
-      } catch (error: any) {
-        console.error('Error saving email:', error);
-        setTxStatus('Failed to save email');
-      }
     }
   };
 
@@ -211,7 +233,6 @@ const TempoDApp = () => {
       const token = STABLECOINS[selectedToken];
       const amountInSmallestUnit = Math.floor(parseFloat(amount) * Math.pow(10, token.decimals));
       
-      // Tạo data cho ERC20 transfer
       const recipientPadded = recipient.slice(2).padStart(64, '0');
       const amountHex = amountInSmallestUnit.toString(16).padStart(64, '0');
       const transferData = '0xa9059cbb' + recipientPadded + amountHex;
@@ -230,26 +251,37 @@ const TempoDApp = () => {
 
       setTxStatus(`Transaction sent! Hash: ${txHash.substring(0, 10)}...`);
       
-      if (memo) {
-        setTxStatus(`Transaction sent with memo: "${memo}". Hash: ${txHash.substring(0, 10)}...`);
+      if (savedChatId) {
+        const explorerUrl = `https://explorer.testnet.tempo.xyz/tx/${txHash}`;
+        
+        let telegramMessage = `💸 <b>Payment Sent Successfully!</b>\n\n`;
+        telegramMessage += `💰 Amount: <b>${amount} ${token.symbol}</b>\n`;
+        telegramMessage += `📤 To: <code>${recipient.substring(0, 6)}...${recipient.substring(38)}</code>\n`;
+        telegramMessage += `📋 Token: ${token.name}\n`;
+        
+        if (memo) {
+          telegramMessage += `📝 Memo: ${memo}\n`;
+        }
+        
+        telegramMessage += `\n🔗 <a href="${explorerUrl}">View on Explorer</a>\n`;
+        telegramMessage += `⏰ ${new Date().toLocaleString()}`;
+
+        const sent = await sendTelegramMessage(savedChatId, telegramMessage);
+        
+        if (sent) {
+          setTxStatus(`✅ Transaction sent! Notification delivered to Telegram`);
+        } else {
+          setTxStatus(`⚠️ Transaction sent but failed to send Telegram notification`);
+        }
       }
       
-      // Simulate sending email notification
-      if (savedEmail) {
-        setTimeout(() => {
-          setTxStatus(`Payment sent! Email notification sent to ${savedEmail}`);
-        }, 2000);
-      }
-      
-      // Reset form
       setRecipient('');
       setAmount('');
       setMemo('');
       
-      // Refresh balances
       setTimeout(() => getAllBalances(), 3000);
       
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error sending transaction:', error);
       setTxStatus('Transaction failed: ' + error.message);
     } finally {
@@ -265,7 +297,7 @@ const TempoDApp = () => {
       BetaUSD: '0',
       ThetaUSD: '0'
     });
-    setSavedEmail('');
+    setSavedChatId('');
     setTxStatus('');
   };
 
@@ -318,7 +350,7 @@ const TempoDApp = () => {
                 </div>
               </li>
               <li>3. Switch to Tempo Testnet</li>
-              <li>4. Click "Connect MetaMask" above</li>
+              <li>4. Click Connect MetaMask above</li>
               <li>5. Get testnet tokens from: <a href="https://docs.tempo.xyz/quickstart/faucet" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Tempo Faucet</a></li>
             </ol>
           </div>
@@ -330,7 +362,6 @@ const TempoDApp = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-cyan-500 p-4">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-gray-800">Tempo Wallet</h1>
@@ -378,7 +409,6 @@ const TempoDApp = () => {
             </div>
           </div>
           
-          {/* Stablecoin Balances */}
           <div className="mb-4">
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-lg font-semibold text-gray-800">Stablecoin Balances</h3>
@@ -386,7 +416,7 @@ const TempoDApp = () => {
                 stablecoinBalances.BetaUSD === '0.00' && 
                 stablecoinBalances.ThetaUSD === '0.00') && (
                 <div className="text-xs text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">
-                  No stablecoins - Get from faucet above ↑
+                  No stablecoins - Get from faucet above
                 </div>
               )}
             </div>
@@ -418,53 +448,102 @@ const TempoDApp = () => {
               <div className="text-xs text-gray-500 mt-1">Used for gas fees</div>
             </div>
             
-            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
-              <div className="text-sm text-gray-600 mb-1">Linked Email</div>
-              <div className="text-lg font-semibold text-gray-800 break-all">
-                {savedEmail || 'Not linked'}
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-200">
+              <div className="text-sm text-gray-600 mb-1 flex items-center gap-2">
+                <MessageCircle className="w-4 h-4" />
+                Telegram Notifications
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                {savedChatId ? (
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle className="w-5 h-5" />
+                    <span className="text-sm font-semibold">Connected</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-orange-600">
+                    <AlertCircle className="w-5 h-5" />
+                    <span className="text-sm font-semibold">Not connected</span>
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => setShowProfile(!showProfile)}
-                className="mt-2 flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                className="mt-3 flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 transition-colors font-medium"
               >
                 <Settings className="w-4 h-4" />
-                {savedEmail ? 'Update' : 'Link Email'}
+                {savedChatId ? 'Update Settings' : 'Setup Telegram'}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Profile Section */}
         {showProfile && (
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
             <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <Mail className="w-5 h-5" />
-              Profile Settings
+              <MessageCircle className="w-5 h-5 text-blue-500" />
+              Telegram Notification Settings
             </h2>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <h3 className="font-semibold text-blue-900 mb-2">Setup Instructions:</h3>
+              <ol className="text-sm text-blue-800 space-y-2">
+                <li><strong>1.</strong> Open Telegram and find bot: <code className="bg-white px-2 py-1 rounded">@userinfobot</code></li>
+                <li><strong>2.</strong> Send command <code className="bg-white px-2 py-1 rounded">/start</code> to the bot</li>
+                <li><strong>3.</strong> Bot will return your Chat ID (number like: 123456789)</li>
+                <li><strong>4.</strong> Copy Chat ID and paste below</li>
+                <li><strong>5.</strong> Create your own bot at <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-semibold">@BotFather</a></li>
+                <li><strong>6.</strong> Get Bot Token and replace in code (line: TELEGRAM_BOT_TOKEN)</li>
+              </ol>
+            </div>
+            
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
+                  Telegram Chat ID
                 </label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your.email@example.com"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                  type="text"
+                  value={telegramChatId}
+                  onChange={(e) => setTelegramChatId(e.target.value)}
+                  placeholder="Enter your Chat ID (e.g., 123456789)"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Get Chat ID from @userinfobot on Telegram
+                </p>
               </div>
-              <button
-                onClick={saveEmail}
-                className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 text-white py-3 rounded-lg font-semibold hover:shadow-lg transition-all"
-              >
-                Save Email
-              </button>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={testTelegramConnection}
+                  disabled={testingTelegram || !telegramChatId}
+                  className="flex-1 bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                  {testingTelegram ? 'Testing...' : 'Test Connection'}
+                </button>
+                
+                <button
+                  onClick={saveTelegramChatId}
+                  disabled={!telegramChatId}
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-cyan-500 text-white py-3 rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <CheckCircle className="w-5 h-5" />
+                  Save Settings
+                </button>
+              </div>
             </div>
+            
+            {savedChatId && (
+              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-800">
+                  Currently linked to Chat ID: <code className="font-mono font-semibold">{savedChatId}</code>
+                </p>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Payment Section */}
         <div className="bg-white rounded-2xl shadow-xl p-6">
           <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <Send className="w-5 h-5" />
@@ -474,11 +553,11 @@ const TempoDApp = () => {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Token *
+                Select Token
               </label>
               <select
                 value={selectedToken}
-                onChange={(e) => setSelectedToken(e.target.value as keyof typeof STABLECOINS)}
+                onChange={(e) => setSelectedToken(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
               >
                 <option value="AlphaUSD">AlphaUSD (Balance: {stablecoinBalances.AlphaUSD})</option>
@@ -489,7 +568,7 @@ const TempoDApp = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Recipient Address *
+                Recipient Address
               </label>
               <input
                 type="text"
@@ -502,7 +581,7 @@ const TempoDApp = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Amount *
+                Amount
               </label>
               <input
                 type="number"
@@ -525,8 +604,17 @@ const TempoDApp = () => {
                 rows={3}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none resize-none"
               />
-              <p className="text-xs text-gray-500 mt-1">Note: Memo is for your reference only and not stored on-chain in this version</p>
+              <p className="text-xs text-gray-500 mt-1">Memo will be included in Telegram notification</p>
             </div>
+            
+            {!savedChatId && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-yellow-800">
+                  Telegram notifications are not set up. Click Setup Telegram above to receive transaction notifications.
+                </p>
+              </div>
+            )}
             
             <button
               onClick={sendPayment}
