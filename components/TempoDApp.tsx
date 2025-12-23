@@ -341,12 +341,41 @@ const TempoDApp = () => {
           
           <div className="bg-gradient-to-r from-purple-100 to-cyan-100 rounded-xl p-4 mb-4">
             <div className="text-sm text-gray-600 mb-1">Connected Address</div>
-            <div className="font-mono text-sm text-gray-800 break-all">{account}</div>
+            <div className="font-mono text-sm text-gray-800 break-all mb-3">{account}</div>
+            
+            <div className="flex gap-2 flex-wrap">
+              <a
+                href="https://faucet.testnet.tempo.xyz"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium"
+              >
+                <Wallet className="w-4 h-4" />
+                Get Testnet Tokens
+              </a>
+              <button
+                onClick={getAllBalances}
+                disabled={isLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh Balances
+              </button>
+            </div>
           </div>
           
           {/* Stablecoin Balances */}
           <div className="mb-4">
-            <h3 className="text-lg font-semibold text-gray-800 mb-3">Stablecoin Balances</h3>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-semibold text-gray-800">Stablecoin Balances</h3>
+              {(stablecoinBalances.AlphaUSD === '0.00' && 
+                stablecoinBalances.BetaUSD === '0.00' && 
+                stablecoinBalances.ThetaUSD === '0.00') && (
+                <div className="text-xs text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">
+                  No stablecoins - Get from faucet above ↑
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-200">
                 <div className="text-sm text-gray-600 mb-1">AlphaUSD</div>
@@ -369,9 +398,10 @@ const TempoDApp = () => {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl p-4">
-              <div className="text-sm text-gray-600 mb-1">Native Balance</div>
-              <div className="text-3xl font-bold text-gray-800">{nativeBalance} USD</div>
+            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl p-4 border-2 border-yellow-200">
+              <div className="text-sm text-gray-600 mb-1">Native Balance (pathUSD)</div>
+              <div className="text-3xl font-bold text-gray-800">{nativeBalance}</div>
+              <div className="text-xs text-gray-500 mt-1">Used for gas fees</div>
             </div>
             
             <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
