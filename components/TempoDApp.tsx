@@ -124,7 +124,7 @@ const TempoDApp = () => {
     }
   };
 
-  const getStablecoinBalance = async (tokenKey) => {
+  const getStablecoinBalance = async (tokenKey: keyof typeof STABLECOINS): Promise<string> => {
     if (!window.ethereum || !account) return '0';
     
     try {
