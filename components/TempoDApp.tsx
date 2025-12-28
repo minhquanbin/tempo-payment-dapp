@@ -88,7 +88,7 @@ const TempoDApp: React.FC = () => {
       
       // Create XMTP v3 client - use 'dev' for testnet
       const client = await Client.create(signer, {
-        env: 'dev' // XMTP testnet environment
+        env: 'production' // XMTP testnet environment
       });
       
       setXmtpClient(client);
