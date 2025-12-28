@@ -16,7 +16,7 @@
     "react-dom": "^18.3.1",
     "next": "^14.2.0",
     "ethers": "^5.7.2",
-    "@xmtp/xmtp-js": "^12.1.0",
+    "@xmtp/xmtp-js": "^11.5.1",
     "lucide-react": "^0.446.0"
   },
   "devDependencies": {

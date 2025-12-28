@@ -75,7 +75,7 @@ const TempoDApp: React.FC = () => {
     if (!account || !window.ethereum || typeof window === 'undefined') return;
     
     try {
-      console.log('🚀 Initializing XMTP v3 testnet...');
+      console.log('🚀 Initializing XMTP messaging...');
       setXmtpError('');
       
       // Import XMTP JS SDK (stable v3)
@@ -84,23 +84,23 @@ const TempoDApp: React.FC = () => {
       const provider = new ethers.providers.Web3Provider(window.ethereum as any);
       const signer = provider.getSigner();
       
-      console.log('📝 Creating XMTP v3 client with testnet environment...');
+      console.log('📝 Creating XMTP client...');
       
-      // Create XMTP v3 client - use 'dev' for testnet
+      // Create XMTP client on production network (v2 stable)
       const client = await Client.create(signer, {
-        env: 'production' // XMTP testnet environment
+	  env: 'production' // Production network is stable
       });
       
       setXmtpClient(client);
       setXmtpEnabled(true);
       
-      console.log('✅ XMTP v3 testnet initialized!');
+      console.log('✅ XMTP initialized!');
       console.log('🔑 Address:', client.address);
       
       // Load conversations
       await loadConversations(client);
       
-      setTxStatus('✨ XMTP v3 Testnet Connected!');
+      setTxStatus('✨ XMTP Connected!');
       setTimeout(() => setTxStatus(''), 3000);
       
     } catch (error: any) {
