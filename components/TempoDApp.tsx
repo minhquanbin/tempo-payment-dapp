@@ -95,12 +95,15 @@ const TempoDApp: React.FC = () => {
       const encryptionKey = await generateEncryptionKey(signer);
       
       // Tạo XMTP signer wrapper từ ethers signer
+      const address = await signer.getAddress();
       const xmtpSigner = {
-        getAddress: async () => await signer.getAddress(),
+        getAddress: async () => address,
         signMessage: async (message: string | Uint8Array) => {
           const messageString = typeof message === 'string' ? message : ethers.utils.hexlify(message);
           return await signer.signMessage(messageString);
-        }
+        },
+        getIdentifier: () => address.toLowerCase(),
+        type: 'EOA' as const
       };
       
       // Tạo client với v3 SDK
