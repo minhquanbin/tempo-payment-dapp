@@ -43,6 +43,7 @@ const TempoDApp: React.FC = () => {
   const [selectedToken, setSelectedToken] = useState<keyof typeof STABLECOINS>('AlphaUSD');
   const [memo, setMemo] = useState<string>('');
   const [memoPrefix] = useState<string>('INV123456'); // Prefix cố định
+  const [useGaslessPayment, setUseGaslessPayment] = useState<boolean>(false); // Tính năng mới
   const [txStatus, setTxStatus] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -139,48 +140,139 @@ const TempoDApp: React.FC = () => {
     }
 
     try {
-      setTxStatus('⏳ Processing transaction on Tempo testnet...');
-      setIsLoading(true);
+      if (useGaslessPayment) {
+        // GASLESS PAYMENT - Sử dụng fee sponsorship
+        await sendGaslessPayment();
+      } else {
+        // NORMAL PAYMENT - Code cũ không đổi
+        await sendNormalPayment();
+      }
+    } catch (error: any) {
+      console.error('Transaction error:', error);
+      setTxStatus('❌ Transaction failed: ' + (error.message || 'Unknown error'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const sendNormalPayment = async (): Promise<void> => {
+    setTxStatus('⏳ Processing transaction on Tempo testnet...');
+    setIsLoading(true);
+    
+    const token = STABLECOINS[selectedToken];
+    const amountInSmallestUnit = Math.floor(parseFloat(amount) * Math.pow(10, token.decimals));
+    
+    const recipientPadded = recipient.slice(2).padStart(64, '0');
+    const amountHex = amountInSmallestUnit.toString(16).padStart(64, '0');
+    let transferData = '0xa9059cbb' + recipientPadded + amountHex;
+    
+    // Append memo to transaction data if provided
+    // Combine prefix with user memo
+    const fullMemo = memo && memo.trim() 
+      ? `${memoPrefix} (${memo.trim()})` 
+      : memoPrefix;
+    
+    if (fullMemo) {
+      // Convert memo to hex (UTF-8 encoding)
+      const memoBytes = new TextEncoder().encode(fullMemo);
+      const memoHex = Array.from(memoBytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
       
-      const token = STABLECOINS[selectedToken];
-      const amountInSmallestUnit = Math.floor(parseFloat(amount) * Math.pow(10, token.decimals));
+      // Append memo to transaction data
+      transferData += memoHex;
+      console.log('📝 Full memo added to transaction:', fullMemo);
+    }
+    
+    console.log('💸 Sending normal payment...');
+    const txHash = await window.ethereum.request({
+      method: 'eth_sendTransaction',
+      params: [{
+        from: account,
+        to: token.address,
+        data: transferData,
+        value: '0x0'
+      }],
+    });
+
+    console.log('✅ Tempo transaction sent:', txHash);
+    
+    setTxStatus(`✅ Payment sent with memo: ${fullMemo} | TX: ${txHash.substring(0, 10)}...`);
+    
+    // Clear form
+    setRecipient('');
+    setAmount('');
+    setMemo('');
+    
+    // Refresh balances
+    setTimeout(() => getAllBalances(), 3000);
+  };
+
+  const sendGaslessPayment = async (): Promise<void> => {
+    setTxStatus('⏳ Processing gasless transaction (fee sponsored)...');
+    setIsLoading(true);
+    
+    const token = STABLECOINS[selectedToken];
+    const amountInSmallestUnit = Math.floor(parseFloat(amount) * Math.pow(10, token.decimals));
+    
+    const recipientPadded = recipient.slice(2).padStart(64, '0');
+    const amountHex = amountInSmallestUnit.toString(16).padStart(64, '0');
+    let transferData = '0xa9059cbb' + recipientPadded + amountHex;
+    
+    // Append memo
+    const fullMemo = memo && memo.trim() 
+      ? `${memoPrefix} (${memo.trim()})` 
+      : memoPrefix;
+    
+    if (fullMemo) {
+      const memoBytes = new TextEncoder().encode(fullMemo);
+      const memoHex = Array.from(memoBytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      transferData += memoHex;
+    }
+    
+    console.log('🎁 Sending gasless payment via fee payer...');
+    
+    // Gọi fee payer service (testnet public service)
+    try {
+      const feePayerUrl = 'https://sponsor.testnet.tempo.xyz';
       
-      const recipientPadded = recipient.slice(2).padStart(64, '0');
-      const amountHex = amountInSmallestUnit.toString(16).padStart(64, '0');
-      let transferData = '0xa9059cbb' + recipientPadded + amountHex;
+      // Tạo transaction object
+      const txData = {
+        from: account,
+        to: token.address,
+        data: transferData,
+        value: '0x0',
+        gasLimit: '0x100000' // Estimate gas limit
+      };
       
-      // Append memo to transaction data if provided
-      // Combine prefix with user memo
-      const fullMemo = memo && memo.trim() 
-        ? `${memoPrefix} (${memo.trim()})` 
-        : memoPrefix;
+      // Request fee sponsorship
+      const response = await fetch(feePayerUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          transaction: txData,
+          chainId: 41454 // Tempo testnet chain ID
+        })
+      });
       
-      if (fullMemo) {
-        // Convert memo to hex (UTF-8 encoding)
-        const memoBytes = new TextEncoder().encode(fullMemo);
-        const memoHex = Array.from(memoBytes)
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('');
-        
-        // Append memo to transaction data
-        transferData += memoHex;
-        console.log('📝 Full memo added to transaction:', fullMemo);
+      if (!response.ok) {
+        throw new Error('Fee payer service unavailable');
       }
       
-      console.log('💸 Sending payment...');
+      const { sponsoredTx } = await response.json();
+      
+      // Send sponsored transaction
       const txHash = await window.ethereum.request({
         method: 'eth_sendTransaction',
-        params: [{
-          from: account,
-          to: token.address,
-          data: transferData,
-          value: '0x0'
-        }],
+        params: [sponsoredTx],
       });
 
-      console.log('✅ Tempo transaction sent:', txHash);
-      
-      setTxStatus(`✅ Payment sent with memo: ${fullMemo} | TX: ${txHash.substring(0, 10)}...`);
+      console.log('✅ Gasless transaction sent:', txHash);
+      setTxStatus(`🎉 Gasless payment sent! No gas fees paid | TX: ${txHash.substring(0, 10)}...`);
       
       // Clear form
       setRecipient('');
@@ -191,10 +283,10 @@ const TempoDApp: React.FC = () => {
       setTimeout(() => getAllBalances(), 3000);
       
     } catch (error: any) {
-      console.error('Transaction error:', error);
-      setTxStatus('❌ Transaction failed: ' + (error.message || 'Unknown error'));
-    } finally {
+      console.error('Gasless payment error:', error);
+      setTxStatus('❌ Gasless payment failed. Try normal payment instead.');
       setIsLoading(false);
+      throw error;
     }
   };
 
@@ -390,21 +482,56 @@ const TempoDApp: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* GASLESS PAYMENT TOGGLE - TÍNH NĂNG MỚI */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="gasless"
+                    checked={useGaslessPayment}
+                    onChange={(e) => setUseGaslessPayment(e.target.checked)}
+                    className="mt-1 w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="gasless" className="flex items-center gap-2 cursor-pointer">
+                      <span className="font-semibold text-green-800">🎁 Gasless Payment (Beta)</span>
+                      <span className="px-2 py-0.5 bg-green-200 text-green-700 text-xs rounded-full font-semibold">NEW</span>
+                    </label>
+                    <p className="text-xs text-green-700 mt-1">
+                      {useGaslessPayment 
+                        ? '✅ Gas fees will be sponsored by dApp - You pay ZERO gas!' 
+                        : 'Enable to have gas fees paid by the dApp (no TEMO required)'}
+                    </p>
+                    {useGaslessPayment && (
+                      <div className="mt-2 bg-white border border-green-300 rounded-lg p-2">
+                        <p className="text-xs text-gray-600">
+                          ⚡ Using Tempo testnet fee payer service
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
               
               <button
                 onClick={sendPayment}
                 disabled={isLoading || !recipient || !amount}
-                className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 text-white py-4 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                className={`w-full py-4 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition-all flex items-center justify-center gap-2 ${
+                  useGaslessPayment 
+                    ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white'
+                    : 'bg-gradient-to-r from-purple-600 to-cyan-500 text-white'
+                }`}
               >
                 {isLoading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Processing...
+                    {useGaslessPayment ? 'Processing Gasless...' : 'Processing...'}
                   </>
                 ) : (
                   <>
                     <Send className="w-5 h-5" />
-                    Send Payment
+                    {useGaslessPayment ? '🎁 Send Gasless Payment' : 'Send Payment'}
                   </>
                 )}
               </button>
