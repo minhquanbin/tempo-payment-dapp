@@ -1,35 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Cấu hình Turbopack rỗng để Next.js biết bạn đã xem xét nó
-  turbopack: {},
-  
-  experimental: {
-    optimizePackageImports: ['@xmtp/xmtp-js']
-  },
-  
-  webpack: (config, { isServer }) => {
-    // Xử lý file WASM
-    config.experiments = {
-      ...config.experiments,
-      asyncWebAssembly: true,
-      layers: true,
+  reactStrictMode: true,
+  swcMinify: true,
+  webpack: (config) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      net: false,
+      tls: false,
+      crypto: false,
     };
-
-    config.module.rules.push({
-      test: /\.wasm$/,
-      type: 'asset/resource',
-    });
-
-    // Externalize packages ở phía server
-    if (isServer) {
-      config.externals = config.externals || [];
-      config.externals.push({
-        '@xmtp/xmtp-js': 'commonjs @xmtp/xmtp-js',
-      });
-    }
-
     return config;
   },
-};
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig
