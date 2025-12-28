@@ -17,9 +17,9 @@ interface Message {
 
 interface Conversation {
   peerAddress: string;
-  send: (message: string) => Promise<void>;
-  messages: () => Promise<Message[]>;
-  streamMessages: () => AsyncIterableIterator<Message>;
+  send: (message: string) => Promise<any>;
+  messages: () => Promise<any[]>;
+  streamMessages: () => AsyncIterableIterator<any>;
 }
 
 // Địa chỉ contract của các stablecoin trên Tempo testnet
@@ -68,9 +68,9 @@ const TempoDApp: React.FC = () => {
   const [recipientCanReceiveXMTP, setRecipientCanReceiveXMTP] = useState<boolean | null>(null);
   const [checkingXMTP, setCheckingXMTP] = useState<boolean>(false);
   const [showChat, setShowChat] = useState<boolean>(false);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [selectedConversation, setSelectedConversation] = useState<any | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
   const [newChatMessage, setNewChatMessage] = useState<string>('');
   const [xmtpError, setXmtpError] = useState<string>('');
 
@@ -375,7 +375,7 @@ Powered by Tempo + Real XMTP Protocol 🔐`;
     }
   };
 
-  const openChat = async (conversation: Conversation): Promise<void> => {
+  const openChat = async (conversation: any): Promise<void> => {
     if (!xmtpClient) return;
     
     setSelectedConversation(conversation);
