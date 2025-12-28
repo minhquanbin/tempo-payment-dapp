@@ -107,9 +107,9 @@ const TempoDApp: React.FC = () => {
       
       console.log('📝 Creating XMTP client with signer...');
       
-      // Create XMTP client with production environment
+      // Create XMTP client with dev environment (V2 still works on dev)
       const client = await Client.create(signer, {
-        env: 'production' // Use 'dev' for testing, 'production' for mainnet
+        env: 'dev' // Use 'dev' environment where V2 still works
       });
       
       setXmtpClient(client);
@@ -129,18 +129,23 @@ const TempoDApp: React.FC = () => {
     } catch (error: any) {
       console.error('❌ Error initializing XMTP:', error);
       setXmtpEnabled(false);
-      setXmtpError(error.message || 'Failed to initialize XMTP');
       
-      // Provide helpful error messages
-      if (error.message?.includes('account') || error.message?.includes('signer')) {
+      // Check for V2 deprecation error
+      if (error.message?.includes('XMTP V2') || error.message?.includes('no longer available')) {
+        setXmtpError('XMTP V2 has been deprecated. Messaging temporarily unavailable. Payments still work!');
+        setTxStatus('⚠️ XMTP messaging temporarily unavailable. Payments work normally!');
+      } else if (error.message?.includes('account') || error.message?.includes('signer')) {
+        setXmtpError(error.message || 'Failed to initialize XMTP');
         setTxStatus('⚠️ XMTP: Please ensure wallet is connected properly');
       } else if (error.message?.includes('network')) {
+        setXmtpError(error.message || 'Failed to initialize XMTP');
         setTxStatus('⚠️ XMTP: Network connection issue. Payments still work!');
       } else {
+        setXmtpError(error.message || 'Failed to initialize XMTP');
         setTxStatus('⚠️ XMTP initialization failed. Payments still work!');
       }
       
-      setTimeout(() => setTxStatus(''), 5000);
+      setTimeout(() => setTxStatus(''), 8000);
     }
   };
 
