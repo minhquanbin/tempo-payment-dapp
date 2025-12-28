@@ -156,6 +156,11 @@ const TempoDApp: React.FC = () => {
   };
 
   const sendNormalPayment = async (): Promise<void> => {
+    if (!window.ethereum) {
+      setTxStatus('❌ MetaMask not found');
+      return;
+    }
+    
     setTxStatus('⏳ Processing transaction on Tempo testnet...');
     setIsLoading(true);
     
@@ -209,6 +214,11 @@ const TempoDApp: React.FC = () => {
   };
 
   const sendGaslessPayment = async (): Promise<void> => {
+    if (!window.ethereum) {
+      setTxStatus('❌ MetaMask not found');
+      return;
+    }
+    
     setTxStatus('⏳ Processing gasless transaction (fee sponsored)...');
     setIsLoading(true);
     
