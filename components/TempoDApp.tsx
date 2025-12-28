@@ -78,16 +78,26 @@ const TempoDApp: React.FC = () => {
       console.log('🚀 Initializing XMTP v3...');
       setXmtpError('');
       
-      // Import XMTP Client động để tránh lỗi SSR
-      const { Client } = await import('@xmtp/xmtp-js');
+      // Kiểm tra IndexedDB support
+      if (!window.indexedDB) {
+        throw new Error('IndexedDB không được hỗ trợ trong trình duyệt này');
+      }
+      
+      // Import XMTP v3 Browser SDK
+      const { Client } = await import('@xmtp/browser-sdk');
       
       const provider = new ethers.providers.Web3Provider(window.ethereum as any);
       const signer = provider.getSigner();
       
       console.log('📝 Creating XMTP v3 client...');
       
-      const client = await Client.create(signer, {
-        env: 'production'
+      // Tạo encryption key
+      const encryptionKey = await generateEncryptionKey(signer);
+      
+      // Tạo client với v3 SDK
+      const client = await Client.create(account.toLowerCase(), {
+        env: 'production',
+        dbEncryptionKey: encryptionKey
       });
       
       setXmtpClient(client);
@@ -95,6 +105,7 @@ const TempoDApp: React.FC = () => {
       
       console.log('✅ XMTP v3 initialized successfully!');
       
+      // Lấy danh sách conversations
       const allConversations = await client.conversations.list();
       setConversations(allConversations);
       
@@ -110,6 +121,21 @@ const TempoDApp: React.FC = () => {
     }
   };
 
+  // Helper function để tạo encryption key cho XMTP v3
+  const generateEncryptionKey = async (signer: any): Promise<Uint8Array> => {
+    try {
+      const signature = await signer.signMessage('XMTP encryption key');
+      const encoder = new TextEncoder();
+      const data = encoder.encode(signature);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      return new Uint8Array(hashBuffer);
+    } catch (error) {
+      console.error('Error generating encryption key:', error);
+      // Fallback: tạo key ngẫu nhiên
+      return crypto.getRandomValues(new Uint8Array(32));
+    }
+  };
+
   const checkRecipientXMTP = async (): Promise<void> => {
     if (!xmtpClient || !recipient || recipient.length !== 42) {
       setRecipientCanReceiveXMTP(null);
@@ -118,9 +144,11 @@ const TempoDApp: React.FC = () => {
 
     try {
       setCheckingXMTP(true);
-      const canReceive = await xmtpClient.canMessage(recipient);
-      setRecipientCanReceiveXMTP(canReceive);
+      // XMTP v3 API
+      const canReceive = await xmtpClient.canMessage([recipient.toLowerCase()]);
+      setRecipientCanReceiveXMTP(canReceive[recipient.toLowerCase()] || false);
     } catch (error: any) {
+      console.error('Error checking XMTP:', error);
       setRecipientCanReceiveXMTP(null);
     } finally {
       setCheckingXMTP(false);
@@ -247,14 +275,17 @@ Message: ${memo}
 
 Powered by Tempo + XMTP v3 🔐`;
           
-          const conversation = await xmtpClient.conversations.newConversation(recipient);
+          // XMTP v3: Tạo hoặc lấy conversation
+          const conversation = await xmtpClient.conversations.newConversation(recipient.toLowerCase());
           await conversation.send(messageContent);
           
           setTxStatus(`✅ Payment sent and XMTP v3 message delivered!`);
           
+          // Refresh conversations
           const allConversations = await xmtpClient.conversations.list();
           setConversations(allConversations);
         } catch (xmtpError: any) {
+          console.error('XMTP send error:', xmtpError);
           setTxStatus(`Payment sent but XMTP failed: ${xmtpError.message}`);
         }
       } else {
@@ -282,13 +313,14 @@ Powered by Tempo + XMTP v3 🔐`;
     setShowChat(true);
     
     try {
+      // XMTP v3: Load messages
       const msgs = await conversation.messages();
       setMessages(msgs);
       
+      // Stream new messages
       (async () => {
         try {
-          const stream = await conversation.streamMessages();
-          for await (const message of stream) {
+          for await (const message of await conversation.streamMessages()) {
             setMessages(prev => [...prev, message]);
           }
         } catch (err) {
