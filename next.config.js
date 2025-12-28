@@ -7,7 +7,7 @@ const nextConfig = {
     optimizePackageImports: ['@xmtp/browser-sdk']
   },
   
-  webpack: (config: any, { isServer }: { isServer: boolean }) => {
+  webpack: (config, { isServer }) => {
     // Xử lý file WASM
     config.experiments = {
       ...config.experiments,
@@ -34,4 +34,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
