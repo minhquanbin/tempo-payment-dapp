@@ -94,8 +94,8 @@ const TempoDApp: React.FC = () => {
       // Tạo encryption key
       const encryptionKey = await generateEncryptionKey(signer);
       
-      // Tạo client với v3 SDK
-      const client = await Client.create(account.toLowerCase(), {
+      // Tạo client với v3 SDK - truyền signer thay vì address
+      const client = await Client.create(signer, {
         env: 'production',
         dbEncryptionKey: encryptionKey
       });
