@@ -95,7 +95,6 @@ const TempoDApp: React.FC = () => {
       setXmtpEnabled(true);
       
       console.log('✅ XMTP v3 testnet initialized!');
-      console.log('📧 Inbox ID:', client.inboxId);
       console.log('🔑 Address:', client.address);
       
       // Load conversations
