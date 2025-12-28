@@ -4,7 +4,7 @@ const nextConfig = {
   turbopack: {},
   
   experimental: {
-    optimizePackageImports: ['@xmtp/xmtp-js']
+    optimizePackageImports: ['@xmtp/browser-sdk']
   },
   
   webpack: (config: any, { isServer }: { isServer: boolean }) => {
@@ -26,6 +26,7 @@ const nextConfig = {
       config.externals.push({
         '@xmtp/user-preferences-bindings-wasm': 'commonjs @xmtp/user-preferences-bindings-wasm',
         '@xmtp/mls-bindings-wasm': 'commonjs @xmtp/mls-bindings-wasm',
+        '@xmtp/browser-sdk': 'commonjs @xmtp/browser-sdk',
       });
     }
 
