@@ -72,11 +72,14 @@ const TempoDApp: React.FC = () => {
   }, [recipient, xmtpClient]);
 
   const initializeXMTPv3 = async (): Promise<void> => {
-    if (!account || !window.ethereum) return;
+    if (!account || !window.ethereum || typeof window === 'undefined') return;
     
     try {
       console.log('🚀 Initializing XMTP v3...');
       setXmtpError('');
+      
+      // Import XMTP Client động để tránh lỗi SSR
+      const { Client } = await import('@xmtp/xmtp-js');
       
       const provider = new ethers.providers.Web3Provider(window.ethereum as any);
       const signer = provider.getSigner();
