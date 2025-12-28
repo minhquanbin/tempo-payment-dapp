@@ -1,11 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Disable static optimization for pages using XMTP
+  // Cấu hình Turbopack rỗng để Next.js biết bạn đã xem xét nó
+  turbopack: {},
+  
   experimental: {
     optimizePackageImports: ['@xmtp/xmtp-js']
   },
+  
   webpack: (config, { isServer }) => {
-    // Handle WASM files
+    // Xử lý file WASM
     config.experiments = {
       ...config.experiments,
       asyncWebAssembly: true,
@@ -17,7 +20,7 @@ const nextConfig = {
       type: 'asset/resource',
     });
 
-    // Externalize WASM files on server side
+    // Externalize WASM files ở phía server
     if (isServer) {
       config.externals = config.externals || [];
       config.externals.push({
