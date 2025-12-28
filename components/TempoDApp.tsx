@@ -180,10 +180,6 @@ const TempoDApp: React.FC = () => {
 
       console.log('✅ Tempo transaction sent:', txHash);
       
-      const fullMemo = memo && memo.trim() 
-        ? `${memoPrefix} (${memo.trim()})` 
-        : memoPrefix;
-      
       setTxStatus(`✅ Payment sent with memo: ${fullMemo} | TX: ${txHash.substring(0, 10)}...`);
       
       // Clear form
