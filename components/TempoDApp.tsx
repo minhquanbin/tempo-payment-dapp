@@ -59,7 +59,7 @@ const TempoDApp: React.FC = () => {
   useEffect(() => {
     if (account) {
       getAllBalances();
-      initializeXMTPv3();
+      initializeXMTP();
     }
   }, [account]);
 
@@ -71,59 +71,54 @@ const TempoDApp: React.FC = () => {
     }
   }, [recipient, xmtpClient]);
 
-  const initializeXMTPv3 = async (): Promise<void> => {
+  const initializeXMTP = async (): Promise<void> => {
     if (!account || !window.ethereum || typeof window === 'undefined') return;
     
     try {
-      console.log('🚀 Initializing XMTP...');
+      console.log('🚀 Initializing XMTP v3...');
       setXmtpError('');
       
-      // Import XMTP JS SDK v11 (stable)
+      // Dynamically import XMTP v3 SDK
       const { Client } = await import('@xmtp/xmtp-js');
       
       const provider = new ethers.providers.Web3Provider(window.ethereum as any);
       const signer = provider.getSigner();
       
-      console.log('📝 Creating XMTP client...');
+      console.log('📝 Creating XMTP v3 client with dev network...');
       
-      // Tạo client với JS SDK v11
+      // Create XMTP v3 client with proper configuration
       const client = await Client.create(signer, {
-        env: 'production'
+        env: 'dev' // Use 'dev' for testing, 'production' for mainnet
       });
       
       setXmtpClient(client);
       setXmtpEnabled(true);
       
-      console.log('✅ XMTP initialized successfully!');
+      console.log('✅ XMTP v3 initialized successfully!');
+      console.log('Client address:', client.address);
       
-      // Lấy danh sách conversations
-      const conversations = await client.conversations.list();
-      setConversations(conversations);
+      // Load existing conversations
+      await loadConversations(client);
       
-      setTxStatus('✨ XMTP Connected!');
+      setTxStatus('✨ XMTP v3 Connected!');
       setTimeout(() => setTxStatus(''), 3000);
       
     } catch (error: any) {
       console.error('❌ Error initializing XMTP:', error);
       setXmtpEnabled(false);
-      setXmtpError(error.message || 'Failed to initialize XMTP');
-      setTxStatus('⚠️ XMTP initialization failed. Payments still work!');
+      setXmtpError(error.message || 'Failed to initialize XMTP v3');
+      setTxStatus('⚠️ XMTP initialization failed. Payments still work without messaging!');
       setTimeout(() => setTxStatus(''), 8000);
     }
   };
 
-  // Helper function để tạo encryption key cho XMTP v3
-  const generateEncryptionKey = async (signer: any): Promise<Uint8Array> => {
+  const loadConversations = async (client: any): Promise<void> => {
     try {
-      const signature = await signer.signMessage('XMTP encryption key');
-      const encoder = new TextEncoder();
-      const data = encoder.encode(signature);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      return new Uint8Array(hashBuffer);
-    } catch (error) {
-      console.error('Error generating encryption key:', error);
-      // Fallback: tạo key ngẫu nhiên
-      return crypto.getRandomValues(new Uint8Array(32));
+      const allConversations = await client.conversations.list();
+      console.log(`📬 Loaded ${allConversations.length} conversations`);
+      setConversations(allConversations);
+    } catch (error: any) {
+      console.error('Error loading conversations:', error);
     }
   };
 
@@ -135,12 +130,16 @@ const TempoDApp: React.FC = () => {
 
     try {
       setCheckingXMTP(true);
-      // XMTP React SDK API
+      console.log('Checking if recipient can receive XMTP:', recipient);
+      
+      // Check if recipient is on XMTP network
       const canMessage = await xmtpClient.canMessage(recipient);
+      console.log('Can message recipient:', canMessage);
+      
       setRecipientCanReceiveXMTP(canMessage);
     } catch (error: any) {
-      console.error('Error checking XMTP:', error);
-      setRecipientCanReceiveXMTP(null);
+      console.error('Error checking XMTP capability:', error);
+      setRecipientCanReceiveXMTP(false);
     } finally {
       setCheckingXMTP(false);
     }
@@ -155,15 +154,15 @@ const TempoDApp: React.FC = () => {
         
         if (accounts && accounts.length > 0) {
           setAccount(accounts[0]);
-          setTxStatus('Wallet connected successfully!');
+          setTxStatus('✅ Wallet connected successfully!');
           setTimeout(() => setTxStatus(''), 3000);
         }
       } catch (error: any) {
         console.error('Error connecting wallet:', error);
-        setTxStatus('Failed to connect wallet');
+        setTxStatus('❌ Failed to connect wallet');
       }
     } else {
-      setTxStatus('MetaMask not detected');
+      setTxStatus('❌ MetaMask not detected. Please install MetaMask extension.');
     }
   };
 
@@ -228,12 +227,12 @@ const TempoDApp: React.FC = () => {
 
   const sendPayment = async (): Promise<void> => {
     if (!account || !recipient || !amount || !window.ethereum) {
-      setTxStatus('Please fill all required fields');
+      setTxStatus('⚠️ Please fill all required fields');
       return;
     }
 
     try {
-      setTxStatus('Processing transaction...');
+      setTxStatus('⏳ Processing transaction...');
       setIsLoading(true);
       
       const token = STABLECOINS[selectedToken];
@@ -253,45 +252,53 @@ const TempoDApp: React.FC = () => {
         }],
       });
 
-      setTxStatus(`Transaction sent! Hash: ${txHash.substring(0, 10)}...`);
+      console.log('✅ Transaction sent:', txHash);
+      setTxStatus(`✅ Transaction sent! Hash: ${txHash.substring(0, 10)}...`);
       
+      // Send XMTP notification if available
       if (xmtpClient && recipientCanReceiveXMTP && memo) {
         try {
+          console.log('📤 Sending XMTP notification...');
+          
           const messageContent = `💸 Payment Received!
 
 Amount: ${amount} ${token.symbol}
 From: ${account.substring(0, 6)}...${account.substring(38)}
-Transaction: ${txHash.substring(0, 10)}...
+Transaction: ${txHash.substring(0, 10)}...${txHash.substring(txHash.length - 8)}
 Message: ${memo}
 
-Powered by Tempo + XMTP 🔐`;
+Powered by Tempo + XMTP v3 🔐`;
           
-          // XMTP React SDK: Tạo hoặc lấy conversation
+          // Create or get conversation
           const conversation = await xmtpClient.conversations.newConversation(recipient);
           await conversation.send(messageContent);
           
-          setTxStatus(`✅ Payment sent and XMTP message delivered!`);
+          console.log('✅ XMTP message sent successfully!');
+          setTxStatus(`✅ Payment sent and XMTP notification delivered!`);
           
-          // Refresh conversations
-          const conversations = await xmtpClient.conversations.list();
-          setConversations(conversations);
+          // Refresh conversations list
+          await loadConversations(xmtpClient);
+          
         } catch (xmtpError: any) {
           console.error('XMTP send error:', xmtpError);
-          setTxStatus(`Payment sent but XMTP failed: ${xmtpError.message}`);
+          setTxStatus(`✅ Payment sent but XMTP notification failed: ${xmtpError.message}`);
         }
       } else {
         setTxStatus(`✅ Payment sent successfully!`);
       }
       
+      // Clear form
       setRecipient('');
       setAmount('');
       setMemo('');
       setRecipientCanReceiveXMTP(null);
       
+      // Refresh balances after 3 seconds
       setTimeout(() => getAllBalances(), 3000);
       
     } catch (error: any) {
-      setTxStatus('Transaction failed: ' + error.message);
+      console.error('Transaction error:', error);
+      setTxStatus('❌ Transaction failed: ' + (error.message || 'Unknown error'));
     } finally {
       setIsLoading(false);
     }
@@ -300,27 +307,35 @@ Powered by Tempo + XMTP 🔐`;
   const openChat = async (conversation: any): Promise<void> => {
     if (!xmtpClient) return;
     
-    setSelectedConversation(conversation);
-    setShowChat(true);
-    
     try {
-      // XMTP React SDK: Load messages
-      const msgs = await conversation.messages();
-      setMessages(msgs);
+      setSelectedConversation(conversation);
+      setShowChat(true);
       
-      // Stream new messages
+      console.log('📖 Loading messages for conversation...');
+      
+      // Load all messages
+      const allMessages = await conversation.messages();
+      console.log(`Loaded ${allMessages.length} messages`);
+      setMessages(allMessages);
+      
+      // Start streaming new messages
       const stream = await conversation.streamMessages();
+      
       (async () => {
         try {
           for await (const message of stream) {
+            console.log('📨 New message received:', message);
             setMessages(prev => [...prev, message]);
           }
         } catch (err) {
-          console.error('Stream error:', err);
+          console.error('Message stream error:', err);
         }
       })();
+      
     } catch (error: any) {
-      console.error('Error loading messages:', error);
+      console.error('Error opening chat:', error);
+      setTxStatus('❌ Failed to load chat');
+      setTimeout(() => setTxStatus(''), 3000);
     }
   };
 
@@ -328,12 +343,17 @@ Powered by Tempo + XMTP 🔐`;
     if (!selectedConversation || !newChatMessage.trim()) return;
     
     try {
+      console.log('📤 Sending chat message...');
       await selectedConversation.send(newChatMessage);
       setNewChatMessage('');
-      const msgs = await selectedConversation.messages();
-      setMessages(msgs);
+      
+      // Reload messages
+      const allMessages = await selectedConversation.messages();
+      setMessages(allMessages);
+      
     } catch (error: any) {
-      setTxStatus('Failed to send message');
+      console.error('Error sending message:', error);
+      setTxStatus('❌ Failed to send message');
       setTimeout(() => setTxStatus(''), 3000);
     }
   };
@@ -345,6 +365,8 @@ Powered by Tempo + XMTP 🔐`;
     setXmtpClient(null);
     setXmtpEnabled(false);
     setConversations([]);
+    setTxStatus('👋 Wallet disconnected');
+    setTimeout(() => setTxStatus(''), 3000);
   };
 
   if (!account) {
@@ -356,7 +378,7 @@ Powered by Tempo + XMTP 🔐`;
               <Wallet className="w-10 h-10 text-white" />
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Tempo + XMTP v3</h1>
-            <p className="text-gray-600">Connect wallet to get started</p>
+            <p className="text-gray-600">Secure payments with encrypted messaging</p>
           </div>
           
           <button
@@ -381,7 +403,9 @@ Powered by Tempo + XMTP 🔐`;
     <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-cyan-500 p-4">
       <div className="max-w-6xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Wallet Section */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Wallet Info */}
             <div className="bg-white rounded-2xl shadow-xl p-6">
               <div className="flex justify-between items-center mb-4">
                 <div>
@@ -389,13 +413,19 @@ Powered by Tempo + XMTP 🔐`;
                   {xmtpEnabled && (
                     <div className="flex items-center gap-2 mt-1">
                       <CheckCircle className="w-4 h-4 text-green-500" />
-                      <span className="text-xs text-green-600">XMTP v3 Connected</span>
+                      <span className="text-xs text-green-600 font-medium">XMTP v3 Connected</span>
+                    </div>
+                  )}
+                  {xmtpError && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <AlertCircle className="w-4 h-4 text-orange-500" />
+                      <span className="text-xs text-orange-600">XMTP unavailable</span>
                     </div>
                   )}
                 </div>
                 <button
                   onClick={disconnectWallet}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                   Disconnect
@@ -403,119 +433,192 @@ Powered by Tempo + XMTP 🔐`;
               </div>
               
               <div className="bg-gradient-to-r from-purple-100 to-cyan-100 rounded-xl p-4 mb-4">
-                <div className="text-sm text-gray-600">Address</div>
+                <div className="text-sm text-gray-600 mb-1">Connected Address</div>
                 <div className="font-mono text-sm text-gray-800 break-all">{account}</div>
               </div>
               
               <div className="mb-4">
-                <h3 className="text-lg font-semibold mb-3">Balances</h3>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-lg font-semibold">Stablecoin Balances</h3>
+                  <button
+                    onClick={getAllBalances}
+                    disabled={isLoading}
+                    className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </button>
+                </div>
                 <div className="grid grid-cols-3 gap-4">
                   {Object.entries(stablecoinBalances).map(([key, value]) => (
-                    <div key={key} className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-200">
-                      <div className="text-sm text-gray-600">{key}</div>
-                      <div className="text-2xl font-bold">{value}</div>
+                    <div key={key} className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-200">
+                      <div className="text-xs text-gray-600 mb-1">{key}</div>
+                      <div className="text-xl font-bold text-gray-800">{value}</div>
+                      <div className="text-xs text-gray-500">{STABLECOINS[key as keyof typeof STABLECOINS].symbol}</div>
                     </div>
                   ))}
                 </div>
               </div>
               
-              <div className="bg-yellow-50 rounded-xl p-4 border-2 border-yellow-200">
-                <div className="text-sm text-gray-600">Native Balance</div>
-                <div className="text-3xl font-bold">{nativeBalance}</div>
+              <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl p-4 border-2 border-yellow-200">
+                <div className="text-sm text-gray-600 mb-1">Native Balance (TEMO)</div>
+                <div className="text-2xl font-bold text-gray-800">{nativeBalance}</div>
               </div>
             </div>
 
+            {/* Send Payment Section */}
             <div className="bg-white rounded-2xl shadow-xl p-6">
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Send className="w-5 h-5" />
+                <Send className="w-5 h-5 text-purple-600" />
                 Send Payment
               </h2>
               
               <div className="space-y-4">
-                <select
-                  value={selectedToken}
-                  onChange={(e) => setSelectedToken(e.target.value as keyof typeof STABLECOINS)}
-                  className="w-full px-4 py-3 border rounded-lg"
-                >
-                  {Object.keys(STABLECOINS).map(key => (
-                    <option key={key} value={key}>{key}</option>
-                  ))}
-                </select>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Token
+                  </label>
+                  <select
+                    value={selectedToken}
+                    onChange={(e) => setSelectedToken(e.target.value as keyof typeof STABLECOINS)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    {Object.keys(STABLECOINS).map(key => (
+                      <option key={key} value={key}>
+                        {key} ({STABLECOINS[key as keyof typeof STABLECOINS].symbol})
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 
-                <input
-                  type="text"
-                  value={recipient}
-                  onChange={(e) => setRecipient(e.target.value)}
-                  placeholder="Recipient address (0x...)"
-                  className="w-full px-4 py-3 border rounded-lg"
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Recipient Address
+                  </label>
+                  <input
+                    type="text"
+                    value={recipient}
+                    onChange={(e) => setRecipient(e.target.value)}
+                    placeholder="0x..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
+                  />
+                  {checkingXMTP && (
+                    <div className="flex items-center gap-2 text-sm text-blue-600 mt-2">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Checking XMTP availability...
+                    </div>
+                  )}
+                  {recipientCanReceiveXMTP === true && (
+                    <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-3 rounded-lg mt-2">
+                      <CheckCircle className="w-4 h-4" />
+                      <span className="font-medium">Recipient can receive XMTP messages! 🎉</span>
+                    </div>
+                  )}
+                  {recipientCanReceiveXMTP === false && (
+                    <div className="flex items-center gap-2 text-sm text-orange-600 bg-orange-50 p-3 rounded-lg mt-2">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>Recipient not on XMTP network. Payment will still work.</span>
+                    </div>
+                  )}
+                </div>
                 
-                {recipientCanReceiveXMTP === true && (
-                  <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-2 rounded">
-                    <CheckCircle className="w-4 h-4" />
-                    Recipient can receive XMTP v3!
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Amount
+                  </label>
+                  <input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
                 
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="Amount"
-                  className="w-full px-4 py-3 border rounded-lg"
-                />
-                
-                <textarea
-                  value={memo}
-                  onChange={(e) => setMemo(e.target.value)}
-                  placeholder="Message (sent via XMTP if available)"
-                  rows={3}
-                  className="w-full px-4 py-3 border rounded-lg"
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Message (Optional - sent via XMTP if available)
+                  </label>
+                  <textarea
+                    value={memo}
+                    onChange={(e) => setMemo(e.target.value)}
+                    placeholder="Add a note to your payment..."
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                  />
+                </div>
                 
                 <button
                   onClick={sendPayment}
-                  disabled={isLoading}
-                  className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 text-white py-4 rounded-xl font-semibold disabled:opacity-50"
+                  disabled={isLoading || !recipient || !amount}
+                  className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 text-white py-4 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition-all flex items-center justify-center gap-2"
                 >
-                  {isLoading ? 'Processing...' : 'Send Payment'}
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5" />
+                      Send Payment
+                    </>
+                  )}
                 </button>
               </div>
               
               {txStatus && (
-                <div className="mt-4 p-4 rounded-lg text-sm bg-green-50 border border-green-200">
+                <div className="mt-4 p-4 rounded-lg text-sm bg-blue-50 border border-blue-200 text-blue-800">
                   {txStatus}
                 </div>
               )}
             </div>
           </div>
 
+          {/* XMTP Chat Section */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-xl p-6">
+            <div className="bg-white rounded-2xl shadow-xl p-6 sticky top-4">
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <MessageCircle className="w-5 h-5" />
-                XMTP Chats
+                <MessageCircle className="w-5 h-5 text-purple-600" />
+                XMTP Messages
               </h2>
 
               {!xmtpEnabled ? (
                 <div className="text-center py-8">
-                  <RefreshCw className="w-12 h-12 text-blue-500 mx-auto mb-3 animate-spin" />
-                  <p className="text-sm text-gray-500">Initializing...</p>
+                  {xmtpError ? (
+                    <>
+                      <AlertCircle className="w-12 h-12 text-orange-400 mx-auto mb-3" />
+                      <p className="text-sm text-gray-600 mb-2">XMTP Unavailable</p>
+                      <p className="text-xs text-gray-500">{xmtpError}</p>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-12 h-12 text-blue-500 mx-auto mb-3 animate-spin" />
+                      <p className="text-sm text-gray-600">Initializing XMTP v3...</p>
+                    </>
+                  )}
                 </div>
               ) : conversations.length === 0 ? (
                 <div className="text-center py-8">
                   <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-sm text-gray-500">No conversations</p>
+                  <p className="text-sm text-gray-500">No conversations yet</p>
+                  <p className="text-xs text-gray-400 mt-1">Send a payment with a message to start</p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
                   {conversations.map((conv, idx) => (
                     <button
                       key={idx}
                       onClick={() => openChat(conv)}
-                      className="w-full p-3 rounded-lg hover:bg-gray-50 border text-left"
+                      className="w-full p-3 rounded-lg hover:bg-gray-50 border border-gray-200 text-left transition-colors"
                     >
-                      <div className="font-mono text-xs truncate">
+                      <div className="flex items-center gap-2 mb-1">
+                        <MessageCircle className="w-4 h-4 text-purple-600" />
+                        <span className="text-xs text-gray-500">Conversation {idx + 1}</span>
+                      </div>
+                      <div className="font-mono text-xs text-gray-700 truncate">
                         {conv.peerAddress}
                       </div>
                     </button>
@@ -526,45 +629,69 @@ Powered by Tempo + XMTP 🔐`;
           </div>
         </div>
 
+        {/* Chat Modal */}
         {showChat && selectedConversation && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-              <div className="p-4 border-b flex justify-between items-center">
-                <h3 className="font-bold">Chat</h3>
-                <button onClick={() => setShowChat(false)}>
-                  <X className="w-5 h-5" />
+            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
+              <div className="p-4 border-b flex justify-between items-center bg-gradient-to-r from-purple-50 to-cyan-50">
+                <div>
+                  <h3 className="font-bold text-gray-800">Chat</h3>
+                  <p className="text-xs text-gray-600 font-mono truncate max-w-md">
+                    {selectedConversation.peerAddress}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setShowChat(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600" />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex ${msg.senderAddress === account ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div className={`max-w-[70%] rounded-2xl p-3 ${
-                      msg.senderAddress === account
-                        ? 'bg-purple-500 text-white'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {msg.content}
-                    </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                {messages.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm">No messages yet</p>
                   </div>
-                ))}
+                ) : (
+                  messages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex ${msg.senderAddress === account ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div className={`max-w-[70%] rounded-2xl p-3 ${
+                        msg.senderAddress === account
+                          ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white'
+                          : 'bg-white text-gray-800 border border-gray-200'
+                      }`}>
+                        <div className="text-sm whitespace-pre-wrap break-words">
+                          {msg.content}
+                        </div>
+                        <div className={`text-xs mt-1 ${
+                          msg.senderAddress === account ? 'text-purple-100' : 'text-gray-500'
+                        }`}>
+                          {new Date(msg.sent).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
-              <div className="p-4 border-t flex gap-2">
+              <div className="p-4 border-t bg-white flex gap-2">
                 <input
                   type="text"
                   value={newChatMessage}
                   onChange={(e) => setNewChatMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
-                  placeholder="Type message..."
-                  className="flex-1 px-4 py-2 border rounded-lg"
+                  onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendChatMessage()}
+                  placeholder="Type a message..."
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
                 <button
                   onClick={sendChatMessage}
-                  className="px-6 py-2 bg-purple-600 text-white rounded-lg"
+                  disabled={!newChatMessage.trim()}
+                  className="px-6 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send className="w-5 h-5" />
                 </button>
