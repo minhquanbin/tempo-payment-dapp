@@ -1,14 +1,7 @@
 'use client'
 import React, { useState, useEffect } from 'react';
 import { Wallet, Send, RefreshCw, MessageCircle, X, CheckCircle, AlertCircle, LogOut } from 'lucide-react';
-import dynamic from 'next/dynamic';
 import { ethers } from 'ethers';
-
-// Dynamically import XMTP with no SSR
-const XMTPClientWrapper = dynamic(
-  () => import('@xmtp/xmtp-js').then(mod => ({ default: mod.Client })),
-  { ssr: false }
-);
 
 interface StablecoinBalances {
   AlphaUSD: string;
