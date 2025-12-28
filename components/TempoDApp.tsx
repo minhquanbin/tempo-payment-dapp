@@ -75,60 +75,39 @@ const TempoDApp: React.FC = () => {
     if (!account || !window.ethereum || typeof window === 'undefined') return;
     
     try {
-      console.log('🚀 Initializing XMTP v3...');
+      console.log('🚀 Initializing XMTP...');
       setXmtpError('');
       
-      // Kiểm tra IndexedDB support
-      if (!window.indexedDB) {
-        throw new Error('IndexedDB không được hỗ trợ trong trình duyệt này');
-      }
-      
-      // Import XMTP v3 Browser SDK
-      const { Client } = await import('@xmtp/browser-sdk');
+      // Import XMTP JS SDK v11 (stable)
+      const { Client } = await import('@xmtp/xmtp-js');
       
       const provider = new ethers.providers.Web3Provider(window.ethereum as any);
       const signer = provider.getSigner();
       
-      console.log('📝 Creating XMTP v3 client...');
+      console.log('📝 Creating XMTP client...');
       
-      // Tạo encryption key
-      const encryptionKey = await generateEncryptionKey(signer);
-      
-      // Tạo XMTP signer wrapper từ ethers signer
-      const address = await signer.getAddress();
-      const xmtpSigner = {
-        getAddress: async () => address,
-        signMessage: async (message: string | Uint8Array) => {
-          const messageString = typeof message === 'string' ? message : ethers.utils.hexlify(message);
-          return await signer.signMessage(messageString);
-        },
-        getIdentifier: () => address.toLowerCase(),
-        type: 'EOA' as const
-      };
-      
-      // Tạo client với v3 SDK
-      const client = await Client.create(xmtpSigner as any, {
-        env: 'production',
-        dbEncryptionKey: encryptionKey
+      // Tạo client với JS SDK v11
+      const client = await Client.create(signer, {
+        env: 'production'
       });
       
       setXmtpClient(client);
       setXmtpEnabled(true);
       
-      console.log('✅ XMTP v3 initialized successfully!');
+      console.log('✅ XMTP initialized successfully!');
       
       // Lấy danh sách conversations
-      const allConversations = await client.conversations.list();
-      setConversations(allConversations);
+      const conversations = await client.conversations.list();
+      setConversations(conversations);
       
-      setTxStatus('✨ XMTP v3 Connected!');
+      setTxStatus('✨ XMTP Connected!');
       setTimeout(() => setTxStatus(''), 3000);
       
     } catch (error: any) {
-      console.error('❌ Error initializing XMTP v3:', error);
+      console.error('❌ Error initializing XMTP:', error);
       setXmtpEnabled(false);
-      setXmtpError(error.message || 'Failed to initialize XMTP v3');
-      setTxStatus('⚠️ XMTP v3 initialization failed. Payments still work!');
+      setXmtpError(error.message || 'Failed to initialize XMTP');
+      setTxStatus('⚠️ XMTP initialization failed. Payments still work!');
       setTimeout(() => setTxStatus(''), 8000);
     }
   };
@@ -156,9 +135,9 @@ const TempoDApp: React.FC = () => {
 
     try {
       setCheckingXMTP(true);
-      // XMTP v3 API
-      const canReceive = await xmtpClient.canMessage([recipient.toLowerCase()]);
-      setRecipientCanReceiveXMTP(canReceive[recipient.toLowerCase()] || false);
+      // XMTP React SDK API
+      const canMessage = await xmtpClient.canMessage(recipient);
+      setRecipientCanReceiveXMTP(canMessage);
     } catch (error: any) {
       console.error('Error checking XMTP:', error);
       setRecipientCanReceiveXMTP(null);
@@ -285,17 +264,17 @@ From: ${account.substring(0, 6)}...${account.substring(38)}
 Transaction: ${txHash.substring(0, 10)}...
 Message: ${memo}
 
-Powered by Tempo + XMTP v3 🔐`;
+Powered by Tempo + XMTP 🔐`;
           
-          // XMTP v3: Tạo hoặc lấy conversation
-          const conversation = await xmtpClient.conversations.newConversation(recipient.toLowerCase());
+          // XMTP React SDK: Tạo hoặc lấy conversation
+          const conversation = await xmtpClient.conversations.newConversation(recipient);
           await conversation.send(messageContent);
           
-          setTxStatus(`✅ Payment sent and XMTP v3 message delivered!`);
+          setTxStatus(`✅ Payment sent and XMTP message delivered!`);
           
           // Refresh conversations
-          const allConversations = await xmtpClient.conversations.list();
-          setConversations(allConversations);
+          const conversations = await xmtpClient.conversations.list();
+          setConversations(conversations);
         } catch (xmtpError: any) {
           console.error('XMTP send error:', xmtpError);
           setTxStatus(`Payment sent but XMTP failed: ${xmtpError.message}`);
@@ -325,14 +304,15 @@ Powered by Tempo + XMTP v3 🔐`;
     setShowChat(true);
     
     try {
-      // XMTP v3: Load messages
+      // XMTP React SDK: Load messages
       const msgs = await conversation.messages();
       setMessages(msgs);
       
       // Stream new messages
+      const stream = await conversation.streamMessages();
       (async () => {
         try {
-          for await (const message of await conversation.streamMessages()) {
+          for await (const message of stream) {
             setMessages(prev => [...prev, message]);
           }
         } catch (err) {

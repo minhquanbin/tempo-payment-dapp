@@ -4,7 +4,7 @@ const nextConfig = {
   turbopack: {},
   
   experimental: {
-    optimizePackageImports: ['@xmtp/browser-sdk']
+    optimizePackageImports: ['@xmtp/xmtp-js']
   },
   
   webpack: (config, { isServer }) => {
@@ -20,13 +20,11 @@ const nextConfig = {
       type: 'asset/resource',
     });
 
-    // Externalize WASM files ở phía server
+    // Externalize packages ở phía server
     if (isServer) {
       config.externals = config.externals || [];
       config.externals.push({
-        '@xmtp/user-preferences-bindings-wasm': 'commonjs @xmtp/user-preferences-bindings-wasm',
-        '@xmtp/mls-bindings-wasm': 'commonjs @xmtp/mls-bindings-wasm',
-        '@xmtp/browser-sdk': 'commonjs @xmtp/browser-sdk',
+        '@xmtp/xmtp-js': 'commonjs @xmtp/xmtp-js',
       });
     }
 
